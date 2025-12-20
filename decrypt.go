@@ -85,7 +85,8 @@ func (d *Dispatcher) selectInstance(adamId string) *DecryptInstance {
 	}
 
 	for _, inst := range d.Instances {
-		if inst.GetLastAdamId() == "" && checkAvailableOnRegion(adamId, inst.region, false) {
+		ok, _ := checkAvailableOnRegion(adamId, inst.region, false)
+		if inst.GetLastAdamId() == "" && ok {
 			// logrus.Debugf("selected instance %s for adamid %s, method 2", inst.id, adamId)
 			return inst
 		}
@@ -94,7 +95,8 @@ func (d *Dispatcher) selectInstance(adamId string) *DecryptInstance {
 	var candidates []*DecryptInstance
 
 	for _, inst := range d.Instances {
-		if checkAvailableOnRegion(adamId, inst.region, false) {
+		ok, _ := checkAvailableOnRegion(adamId, inst.region, false)
+		if ok {
 			candidates = append(candidates, inst)
 		}
 	}

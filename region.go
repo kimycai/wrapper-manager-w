@@ -15,7 +15,7 @@ var (
 	songRegionSingleFlight singleflight.Group
 )
 
-func checkAvailableOnRegion(adamId string, region string, mv bool) bool {
+func checkAvailableOnRegion(adamId string, region string, mv bool) (bool, error) {
 	var cacheKey string
 	if mv {
 		cacheKey = fmt.Sprintf("mv/%s/%s", region, adamId)
@@ -23,10 +23,10 @@ func checkAvailableOnRegion(adamId string, region string, mv bool) bool {
 		cacheKey = fmt.Sprintf("song/%s/%s", region, adamId)
 	}
 	if result, ok := SongRegionCache.Load(cacheKey); ok {
-		return result.(bool)
+		return result.(bool), nil
 	}
 
-	val, _, _ := songRegionSingleFlight.Do(cacheKey, func() (interface{}, error) {
+	val, err, _ := songRegionSingleFlight.Do(cacheKey, func() (interface{}, error) {
 		if adamId == "0" {
 			return true, nil
 		}
@@ -72,27 +72,35 @@ func checkAvailableOnRegion(adamId string, region string, mv bool) bool {
 		return available, nil
 	})
 
-	return val.(bool)
+	return val.(bool), err
 }
 
-func SelectInstance(adamId string) string {
+func SelectInstance(adamId string) (string, error) {
 	var selectedInstances []string
 	for _, instance := range Instances {
-		if checkAvailableOnRegion(adamId, instance.Region, false) {
+		available, err := checkAvailableOnRegion(adamId, instance.Region, false)
+		if err != nil {
+			return "", err
+		}
+		if available {
 			selectedInstances = append(selectedInstances, instance.Id)
 		}
 	}
 	if len(selectedInstances) == 0 {
 		for _, instance := range Instances {
-			if checkAvailableOnRegion(adamId, instance.Region, true) {
+			available, err := checkAvailableOnRegion(adamId, instance.Region, false)
+			if err != nil {
+				return "", err
+			}
+			if available {
 				selectedInstances = append(selectedInstances, instance.Id)
 			}
 		}
 	}
 	if len(selectedInstances) != 0 {
-		return selectedInstances[rand.Intn(len(selectedInstances))]
+		return selectedInstances[rand.Intn(len(selectedInstances))], nil
 	}
-	return ""
+	return "", nil
 }
 
 func SelectInstanceForLyrics(adamId string, language string) string {

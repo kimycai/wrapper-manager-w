@@ -170,7 +170,23 @@ func (s *server) Decrypt(stream grpc.BidiStreamingServer[pb.DecryptRequest, pb.D
 		}
 		available := false
 		for _, inst := range Instances {
-			if checkAvailableOnRegion(req.Data.AdamId, inst.Region, false) {
+			ok, err := checkAvailableOnRegion(req.Data.AdamId, inst.Region, false)
+			if err != nil {
+				_ = stream.Send(&pb.DecryptReply{
+					Header: &pb.ReplyHeader{
+						Code: -1,
+						Msg:  err.Error(),
+					},
+					Data: &pb.DecryptData{
+						AdamId:      req.Data.AdamId,
+						Key:         req.Data.Key,
+						Sample:      req.Data.Sample,
+						SampleIndex: req.Data.SampleIndex,
+					},
+				})
+				break
+			}
+			if ok {
 				available = true
 				break
 			}
@@ -229,7 +245,15 @@ func (s *server) M3U8(c context.Context, req *pb.M3U8Request) (*pb.M3U8Reply, er
 	} else {
 		log.Infof("m3u8 request from unknown peer")
 	}
-	instanceID := SelectInstance(req.Data.AdamId)
+	instanceID, err := SelectInstance(req.Data.AdamId)
+	if err != nil {
+		return &pb.M3U8Reply{
+			Header: &pb.ReplyHeader{
+				Code: -1,
+				Msg:  err.Error(),
+			},
+		}, nil
+	}
 	if instanceID == "" {
 		return &pb.M3U8Reply{
 			Header: &pb.ReplyHeader{
@@ -338,7 +362,16 @@ func (s *server) WebPlayback(c context.Context, req *pb.WebPlaybackRequest) (*pb
 	} else {
 		log.Infof("webplayback request from unknown peer")
 	}
-	instanceID := SelectInstance(req.Data.AdamId)
+	instanceID, err := SelectInstance(req.Data.AdamId)
+	if err != nil {
+		return &pb.WebPlaybackReply{
+			Header: &pb.ReplyHeader{
+				Code: -1,
+				Msg:  err.Error(),
+			},
+			Data: nil,
+		}, nil
+	}
 	if instanceID == "" {
 		return &pb.WebPlaybackReply{
 			Header: &pb.ReplyHeader{
@@ -397,7 +430,16 @@ func (s *server) License(c context.Context, req *pb.LicenseRequest) (*pb.License
 	} else {
 		log.Infof("license request from unknown peer")
 	}
-	instanceID := SelectInstance(req.Data.AdamId)
+	instanceID, err := SelectInstance(req.Data.AdamId)
+	if err != nil {
+		return &pb.LicenseReply{
+			Header: &pb.ReplyHeader{
+				Code: -1,
+				Msg:  err.Error(),
+			},
+			Data: nil,
+		}, nil
+	}
 	if instanceID == "" {
 		return &pb.LicenseReply{
 			Header: &pb.ReplyHeader{
