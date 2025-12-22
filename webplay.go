@@ -77,6 +77,9 @@ func GetLicense(adamId string, challenge string, uri string, token string, music
 	if respJson["errors"] != nil {
 		return "", 0, errors.New("failed to get license")
 	}
+	if respJson["license"] == nil {
+		return "", 0, errors.New("failed to get license")
+	}
 	license := respJson["license"].(string)
 	renew := int(respJson["renew-after"].(float64))
 	return license, renew, nil
