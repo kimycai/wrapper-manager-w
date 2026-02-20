@@ -1,0 +1,80 @@
+name: Build Windows Wrapper Manager
+
+on:
+  workflow_dispatch:  # 只支持手动触发
+
+jobs:
+  build-windows:
+    runs-on: windows-latest  # 使用Windows运行器
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.23'
+        cache-dependency-path: go.mod
+
+    - name: Build for Windows
+      run: |
+        go mod tidy
+        go build -o wrapper-manager.exe
+        # 验证构建是否成功
+        if (Test-Path wrapper-manager.exe) {
+            Write-Host "Build successful! File size: $((Get-Item wrapper-manager.exe).Length) bytes"
+        } else {
+            Write-Error "Build failed: wrapper-manager.exe not found"
+            exit 1
+        }
+
+    - name: Create prebuilt directory if not exists
+      run: |
+        if (!(Test-Path prebuilt)) {
+            New-Item -ItemType Directory -Path prebuilt
+            Write-Host "Created prebuilt directory"
+        }
+
+    - name: Copy binary to prebuilt directory
+      run: |
+        Copy-Item wrapper-manager.exe prebuilt/
+        Write-Host "Copied wrapper-manager.exe to prebuilt/"
+
+    - name: List prebuilt directory contents
+      run: |
+        Get-ChildItem prebuilt -Recurse
+
+    - name: Commit and push if changed
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+        git add prebuilt/
+        
+        if (git diff --staged --quiet) {
+            Write-Host "No changes to commit"
+        } else {
+            git commit -m "chore: update Windows binary [skip ci]"
+            git push
+            Write-Host "Pushed changes to repository"
+        }
+
+    - name: Create Release on tag
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: prebuilt/wrapper-manager.exe
+        tag_name: ${{ github.ref_name }}
+        name: Release ${{ github.ref_name }}
+        body: |
+          Windows build of wrapper-manager
+          
+          **Usage:**
+          ```cmd
+          wrapper-manager.exe -host localhost -port 8080
+          ```
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
