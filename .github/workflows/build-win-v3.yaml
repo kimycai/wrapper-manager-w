@@ -1,0 +1,146 @@
+name: Build Windows Wrapper Manager
+
+on:
+  workflow_dispatch:  # 只支持手动触发
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  build-windows:
+    runs-on: windows-latest  # 使用Windows运行器
+    permissions:
+      contents: write  # 添加写入权限
+    
+    steps:
+    - name: Checkout repository with write permission
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        persist-credentials: true
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.23'
+        cache-dependency-path: go.mod
+
+    - name: Build for Windows
+      run: |
+        go mod tidy
+        go build -o wrapper-manager.exe
+        # 验证构建是否成功
+        if (Test-Path wrapper-manager.exe) {
+            Write-Host "Build successful! File size: $((Get-Item wrapper-manager.exe).Length) bytes"
+        } else {
+            Write-Error "Build failed: wrapper-manager.exe not found"
+            exit 1
+        }
+
+    - name: Create version info file
+      run: |
+        $version = "${{ github.event.inputs.version }}"
+        $buildTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        $commitHash = "${{ github.sha }}"
+        
+        $versionInfo = @"
+Wrapper Manager Build Information
+=================================
+Version: $version
+Build Time: $buildTime
+Commit: $commitHash
+Run ID: ${{ github.run_id }}
+Repository: ${{ github.repository }}
+"@
+        
+        Set-Content -Path "build-info.txt" -Value $versionInfo
+        Write-Host "Created build-info.txt:"
+        Get-Content build-info.txt
+
+    - name: Create prebuilt directory if not exists
+      run: |
+        if (!(Test-Path prebuilt)) {
+            New-Item -ItemType Directory -Path prebuilt
+            Write-Host "Created prebuilt directory"
+        }
+
+    - name: Copy files to prebuilt directory
+      run: |
+        Copy-Item wrapper-manager.exe prebuilt/
+        Copy-Item build-info.txt prebuilt/
+        Write-Host "Copied files to prebuilt/:"
+        Get-ChildItem prebuilt/
+
+    - name: List prebuilt directory contents
+      run: |
+        Write-Host "Current directory: $(Get-Location)"
+        Write-Host "Files in current directory:"
+        Get-ChildItem -Recurse
+        Write-Host "Files in prebuilt directory:"
+        if (Test-Path prebuilt) {
+            Get-ChildItem prebuilt -Recurse
+        } else {
+            Write-Host "prebuilt directory does not exist"
+        }
+        
+        # 验证文件权限
+        if (Test-Path prebuilt/wrapper-manager.exe) {
+            Write-Host "File permissions:"
+            Get-ACL prebuilt/wrapper-manager.exe | Format-List
+        }
+
+    - name: Commit and push if changed
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+        # 检查文件是否有实际变化
+        $filePath = "prebuilt/wrapper-manager.exe"
+        if (Test-Path $filePath) {
+            $currentHash = (Get-FileHash $filePath -Algorithm SHA256).Hash
+            Write-Host "Current file hash: $currentHash"
+        }
+        
+        git add prebuilt/
+        
+        # 使用更可靠的方式检查是否有变化
+        $status = git status --porcelain
+        if ([string]::IsNullOrWhiteSpace($status)) {
+            Write-Host "No changes to commit"
+        } else {
+            Write-Host "Changes detected: $status"
+            git commit -m "chore: update Windows binary [skip ci]"
+            git push origin HEAD:${{ github.ref }}
+            Write-Host "Pushed changes to repository"
+        }
+
+    - name: Create Git tag for release
+      if: ${{ github.event_name == 'workflow_dispatch' }}
+      run: |
+        # 创建并推送标签
+        git tag ${{ github.event.inputs.version }}
+        git push origin ${{ github.event.inputs.version }}
+        Write-Host "Created tag: ${{ github.event.inputs.version }}"
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          prebuilt/wrapper-manager.exe
+          prebuilt/build-info.txt
+        tag_name: ${{ github.event.inputs.version }}
+        name: Release ${{ github.event.inputs.version }}
+        body: |
+          Windows build of wrapper-manager
+          
+          **Build Info:**
+          - Version: ${{ github.event.inputs.version }}
+          - Build Date: ${{ github.run_created }}
+          - Commit: ${{ github.sha }}
+          - Run ID: ${{ github.run_id }}
+          
+          **Usage:**
+          ```cmd
+          wrapper-manager.exe
