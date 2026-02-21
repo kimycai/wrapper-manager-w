@@ -45,15 +45,13 @@ jobs:
         $buildTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
         $commitHash = "${{ github.sha }}"
         
-        $versionInfo = @"
-Wrapper Manager Build Information
-=================================
-Version: $version
-Build Time: $buildTime
-Commit: $commitHash
-Run ID: ${{ github.run_id }}
-Repository: ${{ github.repository }}
-"@
+        $versionInfo = "Wrapper Manager Build Information`n"
+        $versionInfo += "=================================`n"
+        $versionInfo += "Version: $version`n"
+        $versionInfo += "Build Time: $buildTime`n"
+        $versionInfo += "Commit: $commitHash`n"
+        $versionInfo += "Run ID: ${{ github.run_id }}`n"
+        $versionInfo += "Repository: ${{ github.repository }}"
         
         Set-Content -Path "build-info.txt" -Value $versionInfo
         Write-Host "Created build-info.txt:"
@@ -143,4 +141,21 @@ Repository: ${{ github.repository }}
           
           **Usage:**
           ```cmd
-          wrapper-manager.exe
+          wrapper-manager.exe -host localhost -port 8080
+          ```
+          
+          **Configuration:**
+          ```toml
+          [instance]
+          url = "localhost"
+          port = 8080
+          secure = false
+          ```
+          
+          **Files included:**
+          - `wrapper-manager.exe` - Main executable
+          - `build-info.txt` - Build information
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
