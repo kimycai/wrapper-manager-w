@@ -66,15 +66,13 @@ jobs:
 
     - name: Create version info file
       run: |
-        cat > build-info.txt << EOF
-Wrapper Manager Linux Build
-============================
-Version: ${{ steps.version.outputs.VERSION }}
-Build Date: $(date -u)
-Commit: ${{ github.sha }}
-Platform: Linux x86_64
-Repository: ${{ github.repository }}
-EOF
+        echo "Wrapper Manager Linux Build" > build-info.txt
+        echo "============================" >> build-info.txt
+        echo "Version: ${{ steps.version.outputs.VERSION }}" >> build-info.txt
+        echo "Build Date: $(date -u)" >> build-info.txt
+        echo "Commit: ${{ github.sha }}" >> build-info.txt
+        echo "Platform: Linux x86_64" >> build-info.txt
+        echo "Repository: ${{ github.repository }}" >> build-info.txt
         cat build-info.txt
 
     - name: Create Release
