@@ -1,0 +1,7 @@
+Wrapper Manager Build Information
+=================================
+Version: v0.3
+Build Time: 2026-02-21 00:15:35
+Commit: c4af0cd771060013ffef39029b4ed455deeba599
+Run ID: 22246230633
+Repository: kimycai/wrapper-manager-w
