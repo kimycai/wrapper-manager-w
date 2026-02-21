@@ -1,0 +1,180 @@
+name: Build Linux Wrapper Manager (x64)
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.23'
+        cache-dependency-path: go.mod
+
+    - name: Build for Linux x64
+      run: |
+        echo "Building for Linux x86_64..."
+        GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o wrapper-manager-linux-amd64 .
+        
+        # 验证构建
+        if [ -f "wrapper-manager-linux-amd64" ]; then
+          file wrapper-manager-linux-amd64
+          ls -lh wrapper-manager-linux-amd64
+          echo "Build successful for Linux x86_64"
+        else
+          echo "Build failed for Linux x86_64"
+          exit 1
+        fi
+
+  create-release:
+    needs: build-linux
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: ./artifacts
+
+    - name: Set version info
+      id: version
+      run: |
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+        else
+          echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        fi
+        echo "Using version: ${{ steps.version.outputs.VERSION }}"
+
+    - name: Create version info file
+      run: |
+        cat > build-info.txt << EOF
+Wrapper Manager Linux Build
+============================
+Version: ${{ steps.version.outputs.VERSION }}
+Build Date: $(date -u)
+Commit: ${{ github.sha }}
+Platform: Linux x86_64
+Repository: ${{ github.repository }}
+EOF
+        cat build-info.txt
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          wrapper-manager-linux-amd64
+          build-info.txt
+        tag_name: ${{ steps.version.outputs.VERSION }}
+        name: Release ${{ steps.version.outputs.VERSION }}
+        body: |
+          Linux x86_64 build of wrapper-manager
+          
+          **Build Information:**
+          - Version: ${{ steps.version.outputs.VERSION }}
+          - Build Date: ${{ github.run_created }}
+          - Commit: ${{ github.sha }}
+          - Platform: Linux x86_64
+          
+          **Usage Instructions:**
+          
+          ```bash
+          # Download and make executable
+          chmod +x wrapper-manager-linux-amd64
+          
+          # Run with default settings
+          ./wrapper-manager-linux-amd64 -host 0.0.0.0 -port 8080
+          
+          # Run with proxy (optional)
+          ./wrapper-manager-linux-amd64 -host 0.0.0.0 -port 8080 -proxy http://your-proxy:port
+          
+          # Run with debug mode
+          ./wrapper-manager-linux-amd64 -host 0.0.0.0 -port 8080 -debug
+          ```
+          
+          **Configuration Example:**
+          
+          For use with AppleMusicDecrypt, configure in `config.toml`:
+          ```toml
+          [instance]
+          url = "your-server-ip"
+          port = 8080
+          secure = false
+          ```
+          
+          **Files Included:**
+          - `wrapper-manager-linux-amd64` - Linux x86_64 binary
+          - `build-info.txt` - Build information
+          
+          **Verification:**
+          ```bash
+          # Check file type
+          file wrapper-manager-linux-amd64
+          
+          # Expected output:
+          # wrapper-manager-linux-amd64: ELF 64-bit LSB executable, x86-64, ...
+          ```
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  test-binary:
+    needs: build-linux
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    
+    steps:
+    - name: Test binary functionality
+      run: |
+        chmod +x wrapper-manager-linux-amd64
+        
+        # Basic file checks
+        echo "=== File Information ==="
+        file wrapper-manager-linux-amd64
+        ls -lh wrapper-manager-linux-amd64
+        
+        # Check if it's a valid ELF binary
+        echo "=== ELF Header Check ==="
+        readelf -h wrapper-manager-linux-amd64 | head -10
+        
+        # Test version flag (if supported)
+        echo "=== Version Check ==="
+        ./wrapper-manager-linux-amd64 --version || echo "Version flag not supported"
+        
+        # Test help flag (if supported)
+        echo "=== Help Check ==="
+        ./wrapper-manager-linux-amd64 --help || echo "Help flag not supported"
+        
+        echo "✅ Basic binary tests passed"
+
+  notify-success:
+    needs: [build-linux, create-release]
+    runs-on: ubuntu-latest
+    if: success()
+    
+    steps:
+    - name: Notify build success
+      run: |
+        echo "🎉 Linux x86_64 wrapper-manager build completed successfully!"
+        echo "📦 Release created: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.version.outputs.VERSION }}"
+        echo "🏗️  Platform built: Linux x86_64"
+        echo "🔗 Download link available in the release page"
